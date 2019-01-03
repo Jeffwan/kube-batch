@@ -18,14 +18,20 @@ package allocate
 
 import (
 	"github.com/golang/glog"
+	v1 "k8s.io/api/core/v1"
+
+	"k8s.io/client-go/tools/record"
 
 	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/api"
+	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/cache"
 	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/framework"
 	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/util"
 )
 
 type allocateAction struct {
-	ssn *framework.Session
+	ssn       *framework.Session
+	recorder  record.EventRecorder
+	pcUpdater util.PodConditionUpdater
 }
 
 func New() *allocateAction {
@@ -36,10 +42,14 @@ func (alloc *allocateAction) Name() string {
 	return "allocate"
 }
 
-func (alloc *allocateAction) Initialize() {}
+func (alloc *allocateAction) Initialize() {
+	alloc.recorder = alloc.ssn.Cache.(*cache.SchedulerCache).Recorder
+	alloc.pcUpdater = &util.DefaultPodConditionUpdater{Client: alloc.ssn.Cache.(*cache.SchedulerCache).Kubeclient}
+}
 
 func (alloc *allocateAction) Execute(ssn *framework.Session) {
 	glog.V(3).Infof("Enter Allocate ...")
+	alloc.Initialize()
 	defer glog.V(3).Infof("Leaving Allocate ...")
 
 	queues := util.NewPriorityQueue(ssn.QueueOrderFn)
@@ -117,6 +127,17 @@ func (alloc *allocateAction) Execute(ssn *framework.Session) {
 				if err := ssn.PredicateFn(task, node); err != nil {
 					glog.V(3).Infof("Predicates failed for task <%s/%s> on node <%s>: %v",
 						task.Namespace, task.Name, node.Name, err)
+
+					pod := task.Pod.DeepCopy()
+
+					alloc.recorder.Eventf(pod, v1.EventTypeWarning, "FailedScheduling", "%v", err)
+					alloc.pcUpdater.Update(pod, &v1.PodCondition{
+						Type:    v1.PodScheduled,
+						Status:  v1.ConditionFalse,
+						Reason:  v1.PodReasonUnschedulable,
+						Message: err.Error(),
+					})
+
 					continue
 				}
 

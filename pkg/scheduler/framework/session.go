@@ -32,7 +32,7 @@ import (
 type Session struct {
 	UID types.UID
 
-	cache cache.Cache
+	Cache cache.Cache
 
 	Jobs       []*api.JobInfo
 	JobIndex   map[api.JobID]*api.JobInfo
@@ -58,7 +58,7 @@ type Session struct {
 func openSession(cache cache.Cache) *Session {
 	ssn := &Session{
 		UID:        uuid.NewUUID(),
-		cache:      cache,
+		Cache:      cache,
 		JobIndex:   map[api.JobID]*api.JobInfo{},
 		NodeIndex:  map[string]*api.NodeInfo{},
 		QueueIndex: map[api.QueueID]*api.QueueInfo{},
@@ -187,7 +187,7 @@ func (ssn *Session) Allocate(task *api.TaskInfo, hostname string) error {
 }
 
 func (ssn *Session) dispatch(task *api.TaskInfo) error {
-	if err := ssn.cache.Bind(task, task.NodeName); err != nil {
+	if err := ssn.Cache.Bind(task, task.NodeName); err != nil {
 		return err
 	}
 
@@ -232,7 +232,7 @@ func (ssn *Session) Reclaimable(reclaimer *api.TaskInfo, reclaimees []*api.TaskI
 }
 
 func (ssn *Session) Evict(reclaimee *api.TaskInfo, reason string) error {
-	if err := ssn.cache.Evict(reclaimee, reason); err != nil {
+	if err := ssn.Cache.Evict(reclaimee, reason); err != nil {
 		return err
 	}
 
@@ -292,7 +292,7 @@ func (ssn *Session) Preemptable(preemptor *api.TaskInfo, preemptees []*api.TaskI
 
 // Backoff discards a job from session, so no plugin/action handles it.
 func (ssn *Session) Backoff(job *api.JobInfo, event arbcorev1.Event, reason string) error {
-	if err := ssn.cache.Backoff(job, event, reason); err != nil {
+	if err := ssn.Cache.Backoff(job, event, reason); err != nil {
 		glog.Errorf("Failed to backoff job <%s/%s>: %v",
 			job.Namespace, job.Name, err)
 		return err

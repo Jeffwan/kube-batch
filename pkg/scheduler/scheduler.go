@@ -29,8 +29,10 @@ import (
 )
 
 type Scheduler struct {
-	cache          schedcache.Cache
-	config         *rest.Config
+	cache  schedcache.Cache
+	config *rest.Config
+	// client         clientset.Interface
+	// recorder       record.EventRecorder
 	actions        []framework.Action
 	pluginArgs     []*framework.PluginArgs
 	schedulerConf  string
@@ -39,6 +41,8 @@ type Scheduler struct {
 
 func NewScheduler(
 	config *rest.Config,
+	// client clientset.Interface,
+	// recorder record.EventRecorder,
 	schedulerName string,
 	conf string,
 	period string,
@@ -46,7 +50,9 @@ func NewScheduler(
 ) (*Scheduler, error) {
 	sp, _ := time.ParseDuration(period)
 	scheduler := &Scheduler{
-		config:         config,
+		config: config,
+		// client:         client,
+		// recorder:       recorder,
 		schedulerConf:  conf,
 		cache:          schedcache.New(config, schedulerName, nsAsQueue),
 		schedulePeriod: sp,

@@ -24,7 +24,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	infov1 "k8s.io/client-go/informers/core/v1"
@@ -51,7 +51,7 @@ func New(config *rest.Config, schedulerName string, nsAsQueue bool) Cache {
 type SchedulerCache struct {
 	sync.Mutex
 
-	kubeclient *kubernetes.Clientset
+	Kubeclient *kubernetes.Clientset
 	arbclient  *versioned.Clientset
 
 	podInformer      infov1.PodInformer
@@ -64,7 +64,7 @@ type SchedulerCache struct {
 	Binder  Binder
 	Evictor Evictor
 
-	recorder record.EventRecorder
+	Recorder record.EventRecorder
 
 	Jobs   map[arbapi.JobID]*arbapi.JobInfo
 	Nodes  map[string]*arbapi.NodeInfo
@@ -146,25 +146,25 @@ func newSchedulerCache(config *rest.Config, schedulerName string, nsAsQueue bool
 		Queues:           make(map[arbapi.QueueID]*arbapi.QueueInfo),
 		errTasks:         cache.NewFIFO(taskKey),
 		deletedJobs:      cache.NewFIFO(jobKey),
-		kubeclient:       kubernetes.NewForConfigOrDie(config),
+		Kubeclient:       kubernetes.NewForConfigOrDie(config),
 		arbclient:        versioned.NewForConfigOrDie(config),
 		namespaceAsQueue: nsAsQueue,
 	}
 
 	// Prepare event clients.
 	broadcaster := record.NewBroadcaster()
-	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: sc.kubeclient.CoreV1().Events("")})
-	sc.recorder = broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "kube-batch"})
+	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: sc.Kubeclient.CoreV1().Events("")})
+	sc.Recorder = broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "kube-batch"})
 
 	sc.Binder = &defaultBinder{
-		kubeclient: sc.kubeclient,
+		kubeclient: sc.Kubeclient,
 	}
 
 	sc.Evictor = &defaultEvictor{
-		kubeclient: sc.kubeclient,
+		kubeclient: sc.Kubeclient,
 	}
 
-	informerFactory := informers.NewSharedInformerFactory(sc.kubeclient, 0)
+	informerFactory := informers.NewSharedInformerFactory(sc.Kubeclient, 0)
 
 	// create informer for node information
 	sc.nodeInformer = informerFactory.Core().V1().Nodes()
@@ -322,7 +322,7 @@ func (sc *SchedulerCache) Evict(taskInfo *arbapi.TaskInfo, reason string) error 
 		}
 	}()
 
-	sc.recorder.Eventf(job.PodGroup, v1.EventTypeNormal, string(arbcorev1.EvictEvent), reason)
+	sc.Recorder.Eventf(job.PodGroup, v1.EventTypeNormal, string(arbcorev1.EvictEvent), reason)
 
 	return nil
 }
@@ -495,7 +495,7 @@ func (sc *SchedulerCache) LoadSchedulerConf(path string) (map[string]string, err
 		return nil, err
 	}
 
-	confMap, err := sc.kubeclient.CoreV1().ConfigMaps(ns).Get(name, metav1.GetOptions{})
+	confMap, err := sc.Kubeclient.CoreV1().ConfigMaps(ns).Get(name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -543,16 +543,16 @@ func (sc *SchedulerCache) String() string {
 // Backoff record event for job
 func (sc *SchedulerCache) Backoff(job *arbapi.JobInfo, event arbcorev1.Event, reason string) error {
 	if job.PodGroup != nil {
-		sc.recorder.Eventf(job.PodGroup, v1.EventTypeWarning, string(event), reason)
+		sc.Recorder.Eventf(job.PodGroup, v1.EventTypeWarning, string(event), reason)
 	} else if job.PDB != nil {
-		sc.recorder.Eventf(job.PDB, v1.EventTypeWarning, string(event), reason)
+		sc.Recorder.Eventf(job.PDB, v1.EventTypeWarning, string(event), reason)
 	} else {
 		return fmt.Errorf("no scheduling specification for job")
 	}
 
 	for _, tasks := range job.TaskStatusIndex {
 		for _, t := range tasks {
-			sc.recorder.Eventf(t.Pod, v1.EventTypeWarning, string(event), reason)
+			sc.Recorder.Eventf(t.Pod, v1.EventTypeWarning, string(event), reason)
 		}
 	}
 
